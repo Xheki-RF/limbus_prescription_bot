@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 import os
 import asyncio
 from prescript import *
+from datetime import datetime
+import pytz
 
 
 load_dotenv()
@@ -17,6 +19,9 @@ intents.message_content = True
 intents.members = True
 
 active_prescripts = set()
+last_used = {}
+
+MSK = pytz.timezone("Europe/Moscow")
 
 bot = commands.Bot(command_prefix='!', intents=intents, handler=handler)
 
@@ -33,25 +38,41 @@ async def on_member_join(member):
 
 
 @bot.command()
-@commands.cooldown(1, 86400, commands.BucketType.user)
 async def prescript(ctx):
     user_id = ctx.author.id
 
-    if user_id in active_prescripts:
-        await ctx.message.delete()
+    now_msk = datetime.now(MSK)
+    today = now_msk.date()
 
+    # daily check to prevent multiple prescripts in one day
+    if user_id in last_used and last_used[user_id] == today:
+        warning_message = await ctx.send(f"{ctx.author.mention} You have already generated a prescript today!")
+
+        await asyncio.sleep(2)
+
+        await ctx.message.delete()
+        await warning_message.delete()
+
+        return
+
+    # prevent multiple prescripts at the same time
+    if user_id in active_prescripts:
         warning_message = await ctx.send(f"{ctx.author.mention} You already have a prescript generating!")
+        
         time.sleep(2)
+        await ctx.message.delete()
         await warning_message.delete()
 
         return
 
     active_prescripts.add(user_id)
 
+    status_message = await ctx.send(f"{ctx.author.mention} Generating prescript...")
+
     try:
-        status_message = await ctx.send(f"{ctx.author.mention} Generating prescript...")
-        
         text = await asyncio.to_thread(generate_prescript)
+
+        last_used[user_id] = today
 
         await status_message.delete()
 
