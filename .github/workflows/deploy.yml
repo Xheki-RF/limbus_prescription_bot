@@ -22,6 +22,6 @@ jobs:
           sudo systemctl stop limbus-prescription-bot
           cd /home/pavel/limbus_prescription_bot
           git pull origin main
-          source /venv/bin/activate
+          source ./venv/bin/activate
           pip install -r requirements.txt
           sudo systemctl start limbus-prescription-bot
