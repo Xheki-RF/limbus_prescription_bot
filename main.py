@@ -8,6 +8,7 @@ import asyncio
 from prescript import *
 from datetime import datetime
 import pytz
+import pandas as pd
 
 
 load_dotenv()
@@ -19,7 +20,6 @@ intents.message_content = True
 intents.members = True
 
 active_prescripts = set()
-last_used = {}
 
 MSK = pytz.timezone("Europe/Moscow")
 
@@ -28,7 +28,18 @@ bot = commands.Bot(command_prefix='!', intents=intents, handler=handler)
 
 @bot.event
 async def on_ready():
+    global last_used
     await bot.change_presence(activity=Activity(type=ActivityType.listening, name="!prescript"), status=discord.Status.dnd)
+    
+    try:
+        df = pd.read_csv("logs_info.csv")
+        
+        last_used = dict(zip(df["user_id"], df["date_logged"]))
+    
+    except Exception as e:
+        print(f"Could not load logs_info.csv: {e}")
+        last_used = {}
+
     print(f'Logged in as {bot.user}')
 
 
@@ -42,7 +53,7 @@ async def prescript(ctx):
     user_id = ctx.author.id
 
     now_msk = datetime.now(MSK)
-    today = now_msk.date()
+    today = str(now_msk.date())
 
     # daily check to prevent multiple prescripts in one day
     if user_id in last_used and last_used[user_id] == today:
@@ -74,6 +85,9 @@ async def prescript(ctx):
 
         last_used[user_id] = today
 
+        df = pd.DataFrame(last_used.items(), columns=["user_id", "date_logged"])
+        df.to_csv("logs_info.csv", index=False)
+
         await status_message.delete()
 
         await ctx.send(f"{ctx.author.mention} {text}")
@@ -84,17 +98,6 @@ async def prescript(ctx):
 
     finally:
         active_prescripts.discard(user_id)
-
-
-@prescript.error
-async def prescript_error(ctx, error):
-    if isinstance(error, commands.CommandOnCooldown):
-        remaining = int(error.retry_after)
-
-        hours = remaining // 3600
-        minutes = (remaining % 3600) // 60
-
-        await ctx.send(f"{ctx.author.mention} you can use this again in {hours}h {minutes}m")
 
 
 bot.run(token, log_handler=handler, log_level=logging.DEBUG)
